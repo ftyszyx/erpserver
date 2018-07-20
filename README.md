@@ -1,2 +1,19 @@
-# erpserver
-erpserver
+#ERP系统
+
+###一些笔记
+% 匹配任意字符0次以上
+_ 匹配任意字符一次
+
+
+
+数据库备份增加下载功能，能下载备份文件
+
+###一些问题
+客户端search提交的搜索条件，如果是like就会多一个空格
+[ log ] search:array (
+  'code' => 
+  array (
+    0 => 'like ',
+    1 => 'dd',
+  ),
+) 

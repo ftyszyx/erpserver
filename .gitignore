@@ -1,0 +1,7 @@
+/server/public/uploads
+/server/application/database.php
+/client/web_admin/src/config.js
+/server/application/config.php
+/server/public/sqlbackup
+/server/public/temp
+/sql
