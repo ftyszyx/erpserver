@@ -41,7 +41,9 @@ class LogModel extends BaseModel
             'log.time'=>"time",
             'log.link'=>"link",
             'user.name'=>"user_name",
+            'module.id'=>"module_id",
             'module.name'=>"module_name"
+
         );
     }
 
@@ -55,6 +57,11 @@ class LogModel extends BaseModel
         $data['info']='['.$typeInfo.']'.$info;
         $data['userid']=$this->uid;
         $data['link']=$link;
+        $this->insert($data);
+    }
+
+    public  function  AddLogData($data)
+    {
         $this->insert($data);
     }
 }

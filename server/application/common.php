@@ -116,6 +116,12 @@ function unsetSame(&$data,$oldinfo)
         $paramnum=func_num_args();
         for ($index=2; $index < $paramnum; $index++) {
             $keyname = func_get_arg($index);
+            //\think\Log::record("keyname:{$keyname}"." data:".var_export($data,true),'zyx');
+            //\think\Log::record("keyname:{$keyname}",'zyx');
+            if(array_key_exists($keyname,$data)==false){
+                \think\Log::record("keyname:{$keyname} is unset",'zyx');
+                continue;
+            }
             if((empty($data[$keyname])==false)&&(empty($oldinfo[$keyname])==false))
             {
                 if($data[$keyname]==$oldinfo[$keyname])
@@ -127,11 +133,22 @@ function unsetSame(&$data,$oldinfo)
             }
             else if($data[$keyname]===null)
             {
+                //\think\Log::record("keyname:{$keyname} is null",'zyx');
                 unset($data[$keyname]);
             }
             else if($data[$keyname]===$oldinfo[$keyname]){
+                //\think\Log::record("keyname:{$keyname} is ==",'zyx');
                 unset($data[$keyname]);
             }
+            if(empty($data[$keyname])==false){
+                $typename=gettype($data[$keyname]);
+                \think\Log::record("change type:".$typename,'zyx');
+                if(gettype($data[$keyname])=="string"){
+                    $data[$keyname]= trim($data[$keyname]);
+                    \think\Log::record("trim ok:".$data[$keyname],'zyx');
+                }
+            }
+            
         }
     }
 }
@@ -153,7 +170,7 @@ function getUtf8($src)
 function checkIdCard($idcard){
 
     // 只能是18位
-    if(strlen($idcard)!=18){
+    if(strlen($idcard)<18){
         return false;
     }
     return true;

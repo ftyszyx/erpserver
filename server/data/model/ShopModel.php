@@ -34,6 +34,7 @@ class ShopModel extends BaseModel
             'shop.id'=>"id",
             'shop.shop_type'=>"shop_type",
             'shoptype.name'=>"shop_type_name",
+            'shop.shop_edit_url'=>"shop_edit_url",
             'shop.valid_expire_time'=>"valid_expire_time");
     }
 }

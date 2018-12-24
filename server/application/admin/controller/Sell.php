@@ -68,6 +68,9 @@ class Sell extends BaseController
         $data['logistics'] = request()->post('logistics', null);
         $data['user_info'] = request()->post('user_info', null);
 
+        $data['idnumpic1'] = request()->post('idnumpic1', null);
+        $data['idnumpic2'] = request()->post('idnumpic2', null);
+
 
 
          if(!empty($data['user_id_number'])){
@@ -93,7 +96,7 @@ class Sell extends BaseController
             }
         }
         unsetSame($data,$oldinfo,'store_id','check_user','info',"pay_time",'order_time','user_info',
-            'customer_addr','customer_name','user_id_number','user_phone','track_man','sell_vip_info','logistics');
+            'customer_addr','customer_name','user_id_number','user_phone','track_man','sell_vip_info','logistics','idnumpic1','idnumpic2');
         return SUCCESS;
     }
 
@@ -101,10 +104,10 @@ class Sell extends BaseController
     public  function all()
     {
 
-        Debug::remark('behavior_start', 'time');
+        //Debug::remark('behavior_start', 'time');
         $ret= $this->model->allList();
-        Debug::remark('behavior_end', 'time');
-        \think\Log::record(' [ RunTime:' . Debug::getRangeTime('behavior_start', 'behavior_end') . 's ]', 'zyx');
+        //Debug::remark('behavior_end', 'time');
+        //\think\Log::record(' [ RunTime:' . Debug::getRangeTime('behavior_start', 'behavior_end') . 's ]', 'zyx');
         return $ret;
     }
 
@@ -181,7 +184,7 @@ class Sell extends BaseController
             return AjaxReturn(UPLOAD_ERROR);
         }
     }
-    //导入
+    //csv导入
     public  function  importData()
     {
         \think\Log::record("importData",'zyx');
@@ -200,7 +203,7 @@ class Sell extends BaseController
             $order_count=0;
             Db::startTrans();
             try {
-                $before_num=$this->getTotalNum(['status'=>CHECK_NO]);
+                //$before_num=$this->getTotalNum(['status'=>CHECK_NO]);
                 while ($row = fgetcsv($handle)) {
                     if($row[0]==null){
                         \think\Log::record("row empty".var_export($row,true),'zyx');
@@ -229,8 +232,9 @@ class Sell extends BaseController
                 }
                 DB::commit();
                 $url_path=str_replace(ROOT_PATH,'',$info->getPathname());
-                $after_num=$this->getTotalNum(['status'=>CHECK_NO]);
-                $this->logModel->addLog(sprintf("导入前待审核商品罐数:%d 导入后:%d",$before_num,$after_num),$url_path,'info');
+                //$after_num=$this->getTotalNum(['status'=>CHECK_NO]);
+                //$this->logModel->addLog(sprintf("导入前待审核商品罐数:%d 导入后:%d",$before_num,$after_num),$url_path,'info');
+                //$this->logModel->addLog(sprintf("导入前待审核商品罐数:%d 导入后:%d"),$url_path,'info');
                 return AjaxReturn(SUCCESS);
             }
             catch (\Exception $e){
@@ -247,89 +251,303 @@ class Sell extends BaseController
 
     }
 
-    //同步物流单号到商城
+    //同步物流单号
     public  function  syncOrderShipNum(){
         $shopId= request()->post('shop_id', null);
         if(empty($shopId)){
-            return AjaxReturnMsg("目标商城不能为空");
+            // return AjaxReturnMsg("目标商城不能为空");
+            $synctarget="logistics";
         }
-        $shopInfo=$this->shopModel->where(['id'=>$shopId])->find();
-        if(empty($shopInfo))
+        else{
+            $synctarget="shop";
+            $shopInfo=$this->shopModel->where(['id'=>$shopId])->find();
+            if(empty($shopInfo))
+            {
+                return AjaxReturnMsg("商店不存在");
+            }
+            $shopurl=$shopInfo["shop_edit_url"];
+        }
+    
+        $orderarr= request()->post('id/a', null);
+        // $synctarget= request()->post('target', null);
+        $idlist=array();
+        $okshipnum=array();
+        $searcharr= request()->post('search/a', null);
+
+        if(empty($searcharr)){
+            //return AjaxReturnMsg("订单空");
+            if(empty($orderarr)){
+                return AjaxReturnMsg("订单空");
+            }
+        }else{
+            $totalnum=$this->model->preAll($searcharr,false,null)->where($searcharr)->count();
+            if($totalnum>1000){
+                return AjaxReturnMsg("单次同步数量超过上限");
+            }
+            if($totalnum==0){
+                return AjaxReturnMsg("无订单");
+            }
+        }
+
+        if(count($orderarr)>1000){
+            return AjaxReturnMsg("单次同步数量超过上限");
+        }
+
+        //$oksellids=array();
+        if(empty($searcharr)){
+            \think\Log::record("get ids",'zyx');
+            foreach ($orderarr as $sellid){
+                $sellinfo=$this->model->where(['id'=>$sellid])->find();
+                if(empty($sellinfo))
+                {
+                    return AjaxReturnMsg("订单找不到".$sellid);
+                }
+                $res=$this->initOneSyncOrder($sellinfo,$shopId,$idlist,$okshipnum);
+                if(empty($res)==false){
+                    return AjaxReturnMsg($res);
+                }
+
+            }
+        }else{
+            \think\Log::record("get all:".var_export($searcharr,true),'zyx');
+            $alllist=$this->model->preAll($searcharr,true,null)->where($searcharr)->select();
+            foreach ($alllist as $sellinfo){
+                $res=$this->initOneSyncOrder($sellinfo,$shopId,$idlist,$okshipnum);
+                if(empty($res)==false){
+                    return AjaxReturnMsg($res);
+                }
+            }
+        }
+        if(empty($idlist)){
+            return AjaxReturnMsg("没有符合条件的可同步订单");
+        }
+
+        if($synctarget=="shop"){
+            $url=$shopurl;
+            $senddata=array();
+            $senddata["list"]=$idlist;
+            \think\Log::record("senddata before:".var_export($senddata,true),'zyx');
+            $senddatastr = json_encode($senddata);
+            $opts = array(
+                "http"=>array(
+                    'method'=>'POST',
+                    'header'=>"Content-type: application/x-www-form-urlencodedrn",
+                    "Content-Length:"=> strlen($senddatastr)."",
+                    "content"=>$senddatastr
+                )
+            );
+            try{
+                $context=stream_context_create($opts);
+                \think\Log::record("send url:".$url,'zyx');
+                \think\Log::record("senddata:".var_export($senddata,true),'zyx');
+                $res=file_get_contents($url,false,$context);
+                $arrres=json_decode($res,true);
+                \think\Log::record("get res ".$res,'zyx');
+                if($arrres["code"]==1){
+                    
+                    $this->logModel->addLog(sprintf("同步订单，订单列表:%s 发送的同步数据：%s",var_export($orderarr,true),var_export($senddata,true)),"",'info');
+                    //return AjaxReturn(SUCCESS,$idlist);
+                }else{
+                    return AjaxReturnMsg($arrres["message"]);
+                }
+            }
+            catch (\Exception $e){
+                \think\Log::record("send data err:".$e->getMessage(),'zyx');
+            
+                return AjaxReturnMsg("同步失败:".$e->getMessage());
+            }
+        }
+       
+
+
+        //同步到物流
+        $res=$this->syncLogicToLogic($okshipnum);
+        if(empty($res)){
+            //return AjaxReturn(SUCCESS);
+            //更新状态
+            Db::startTrans();
+            try {
+                foreach ($idlist as $shoporder=>$value){
+                    $this->model->where(['shop_order'=>$shoporder])->update(["shop_sync_flag"=>1]);
+                }
+                DB::commit();
+            }
+            catch (\Exception $e){
+                DB::rollback();
+                return AjaxReturnMsg($e->getMessage());
+            }
+        }else{
+            return AjaxReturnMsg($res);
+        }
+        $resdata=array();
+        $resdata["shipnum"]=$okshipnum;
+        $resdata["syncshop"]=$idlist;
+        return AjaxReturn(SUCCESS,$resdata);
+    }
+
+    
+    //同步到物流系统
+    public function syncLogicToLogic($changelogistics){
+
+        $senddata=array();
+        $shipurl= $this->configModel->getConfig('logistics_url');
+        if(empty($shipurl)==false){
+            $senddata["list"]=$changelogistics;
+            \think\Log::record("senddata before:".var_export($senddata,true),'zyx');
+            $senddatastr = json_encode($senddata);
+            $opts = array(
+                "http"=>array(
+                    'method'=>'POST',
+                    'header'=>"Content-type: application/x-www-form-urlencodedrn",
+                    "Content-Length:"=> strlen($senddatastr)."",
+                    "content"=>$senddatastr
+                )
+            );
+            $context=stream_context_create($opts);
+            \think\Log::record("send url:".$shipurl,'zyx');
+            \think\Log::record("senddata:".var_export($senddata,true),'zyx');
+            $res=file_get_contents($shipurl,false,$context);
+            $arrres=json_decode($res,true);
+            \think\Log::record("get res ".$res,'zyx');
+            if($arrres["code"]==1){
+//                $this->logModel->addLog(sprintf("同步物流到物流系统，订单列表:%s",var_export($changelogistics,true)),"",'info');
+
+            }else{
+                return $arrres["message"];
+            }
+        }
+        return null;
+    }
+
+    //初始化同步到商城的结构信息
+     public function initOneSyncOrder($sellinfo,$shopId,&$idlist,&$okshipnum){
+
+        $sellid=$sellinfo["id"];
+        //代发仓的AB单号不同步的商城
+      
+        if($sellinfo['status']==DELETE_OK)
         {
+            return "订单已经废弃".$sellid;
+        }
+        if(empty($shopId)==false){
+            if($sellinfo["shop_id"]!=$shopId){
+                return "订单商店不匹配".$sellid;
+            }
+        }else{
+            $startpos=strpos($sellinfo["logistics"],"AB");
+            if($sellinfo['store_id']==12&&($startpos===0)){
+                \think\Log::record("store id=12 and AB id:".$sellinfo["logistics"]." res:".$startpos,'zyx');
+                return;
+            }
+        }
+    
+        $shoporder=$sellinfo["shop_order"];
+        $shipitemarr=array();
+        $shipitemarr["logistics"]=$sellinfo["logistics"];
+        $shipitemarr["Idnumpic1"]=$sellinfo["idnumpic1"];
+        $shipitemarr["Idnumpic2"]=$sellinfo["idnumpic2"];
+        $shipitemarr["customer_name"]=$sellinfo["customer_name"];
+        $shipitemarr["user_id_number"]=$sellinfo["user_id_number"];
+        $shipitemarr["client_phone"]=$sellinfo["user_phone"];
+        $shipitemarr["client_address"]=$sellinfo["customer_addr"];
+        $okshipnum[]=$shipitemarr;
+        if(empty($idlist[$shoporder])){
+            $shipnumlist=array();
+            $orderlist=$this->model->where(["shop_order"=>$shoporder])->select();
+            foreach ($orderlist as $orderitem){
+                if($orderitem['status']==DELETE_OK)
+                {
+                    //return AjaxReturn("订单已经废弃".$sellid);
+                }else{
+                    $shipitemarrtemp=array();
+                    $shipitemarrtemp["logistics"]=$orderitem["logistics"];
+                    $shipnumlist[]=$shipitemarrtemp;
+                }
+            }
+            //$idlist[$shoporder]=json_encode($shipnumlist);
+            $idlist[$shoporder]=$shipnumlist;
+        }
+        return null;
+    }
+
+    //物流系统同步物流信息到erp
+    public  function  syncLogicstics()
+    {
+        $token = request()->post('token', null);
+        if (empty($token)) {
+            return AjaxReturnMsg("无权限");
+        }
+        $shopid = request()->post('shop_id', null);
+        $shopinfo = $this->shopModel->where(['id' => $shopid])->find();
+        if (empty($shopinfo)) {
             return AjaxReturnMsg("商店不存在");
         }
-        $shopurl=$shopInfo["shop_edit_url"];
-        $shopuid=$shopInfo["shop_edit_uid"];
-        $shoptoken=$shopInfo["shop_edit_token"];
-
-
-        $orderarr= request()->post('id/a', null);
-        if(empty($orderarr)){
-            return AjaxReturnMsg("订单空");
+        if ($shopinfo["token"] != $token) {
+            return AjaxReturnMsg("token错误");
         }
 
-        $idlist=array();
-        foreach ($orderarr as $sellid){
-            $sellinfo=$this->model->where(['id'=>$sellid])->find();
-            if(empty($sellinfo))
-            {
-                return AjaxReturn("订单找不到".$sellid);
-            }
-            if($sellinfo['status']==DELETE_OK)
-            {
-                return AjaxReturn("订单已经废弃".$sellid);
-            }
-            $shoporder=$sellinfo["shop_order"];
-            if(empty($idlist[$shoporder])){
-                $shipnumlist=array();
-                $orderlist=$this->model->where(["shop_order"=>$shoporder])->select();
-                foreach ($orderlist as $orderitem){
-                    if($orderitem['status']==DELETE_OK)
-                    {
-                        //return AjaxReturn("订单已经废弃".$sellid);
-                    }else{
-                        $shipnumlist[]=$orderitem["logistics"];
-                    }
+        $datalist = request()->post('list/a', null);
+        if(empty($datalist)==true){
+            return AjaxReturnMsg("数据空");
+        }
+        Db::startTrans();
+        try{
+            foreach ($datalist as $dataitem){
+                $shipid=$dataitem["id"];
+                $sellinfo=$this->model->where(["logistics"=>$shipid])->find();
+                if(empty($sellinfo)){
+                    return AjaxReturnMsg("物流不存在");
                 }
-                $idlist[$shoporder]=json_encode($shipnumlist);
+                $newdata=array();
+                if(empty($dataitem["idnumpic1"])==false){
+                    $newdata["idnumpic1"]=$dataitem["idnumpic1"];
+                }
+                if(empty($dataitem["idnumpic2"])==false){
+                    $newdata["idnumpic2"]=$dataitem["idnumpic2"];
+                }
+                if(empty($dataitem["idnum"])==false){
+                    $newdata["user_id_number"]=$dataitem["idnum"];
+                }
+                $ret=$this->model->where(['logistics'=>$shipid])->update($newdata);
             }
-        }
-        $url=sprintf("%s?token=%s&uid=%s",$shopurl,$shoptoken,$shopuid);
-        $senddata=array();
-        $senddata["list"]=$idlist;
-        \think\Log::record("senddata before:".var_export($senddata,true),'zyx');
-        $senddata = json_encode($senddata);
-        $opts = array(
-            "http"=>array(
-                'method'=>'POST',
-                'header'=>"Content-type: application/x-www-form-urlencodedrn",
-                "Content-Length:"=> strlen($senddata)."",
-                "content"=>$senddata
-            )
-        );
-        $context=stream_context_create($opts);
-        \think\Log::record("send url:".$url,'zyx');
-        \think\Log::record("senddata:".var_export($senddata,true),'zyx');
-        $res=file_get_contents($url,false,$context);
-        $arrres=json_decode($res,true);
-        \think\Log::record("get res ".$res,'zyx');
-        if($arrres["code"]==1){
-            $this->logModel->addLog(sprintf("同步订单，订单列表:%s 发送的同步数据：%s",var_export($senddata,true),var_export($orderarr,true)),"",'info');
+            DB::commit();
+            $logdata=array();
+            $logdata['controller']=$this->control;
+            $logdata['method']=$this->action;
+            $logdata['time']=time();
+            $logdata['info']='[info]'.sprintf("商店:%s 修改物流身份证%s",$shopinfo["name"],var_export($datalist,true));
+            $logdata['userid']=$this->uid;
+            $this->logModel->AddLogData($logdata);
             return AjaxReturn(SUCCESS);
-        }else{
-            return AjaxReturnMsg($arrres["message"]);
+        }
+        catch (\Exception $e){
+            \think\Log::record("import data err:".$e->getMessage(),'zyx');
+            DB::rollback();
+            return AjaxReturnMsg("导入失败:".$e->getMessage());
         }
     }
 
+    function  GetLogisticsData($sellinfo){
+        $shipitem=array();
+        $shipitem["Logistics"]=$sellinfo["logistics"];
+        $shipitem["Idnumpic1"]=$sellinfo["idnumpic1"];
+        $shipitem["Idnumpic2"]=$sellinfo["idnumpic2"];
+        $shipitem["customer_name"]=$sellinfo["customer_name"];
+        $shipitem["user_id_number"]=$sellinfo["user_id_number"];
+        $shipitem["client_address"]=$sellinfo["customer_addr"];
+        $shipitem["client_phone"]=$sellinfo["user_phone"];
+        return $shipitem;
+    }
     //从商城导入订单到erp
     public  function  addOneOrder(){
-//        \think\Log::record("addOneOrder:",'zyx');
+        Debug::remark('addOneOrder1', 'time');
         $orderNum=1;
         $token= request()->post('token', null);
         if(empty($token)){
             return AjaxReturnMsg("无权限");
         }
         $shopid= request()->post('shop_id', null);
+        $sendflag= request()->post('sendflag', 1);
         $shopinfo=$this->shopModel->where(['id'=>$shopid])->find();
         if(empty($shopinfo))
         {
@@ -340,7 +558,9 @@ class Sell extends BaseController
         }
         $importarr= request()->post('data/a', null);
 
+        $newShipnumarr=array();
         Db::startTrans();
+        Debug::remark('addOneOrder2', 'time');
         try{
             $getData=Array();
             foreach ($importarr as $key=>$importdata)
@@ -354,21 +574,34 @@ class Sell extends BaseController
                 $itemInfo=$this->itemModel->where(['code'=>$itemcode])->find();
                 if(empty($itemInfo))
                 {
-                    return AjaxReturnMsg("商品不存在:".$itemcode);
+                    return AjaxReturnMsg("订单:".$data['shop_order']."商品不存在:".$itemcode);
                 }
+                \think\Log::record("oneorder ",'zyx');
+                Debug::remark('addOneOrdertemp0', 'time');
                 $data['item_id']=$itemInfo["id"];
                 $itemValueBase=$itemInfo['sell_base_num'];//商品的最小约数
                 $data['num']=$importdata["num"];
                 $totalprice=$importdata["total_price"];
-                $data['unit_price']=intval($totalprice)/intval($data['num']);
+
                 $data['pay_money']=$totalprice;
                 $data['discount']=1;
-                $data['freight_price']=0;
-                $data['service_price']=0;
-                $data['freight_unit_price']=0;
-                $data['service_unit_price']=0;
+                $data['freight_price']=$importdata["freight_price"];
+                $data['service_price']=$importdata["service_price"];
+                $data['supply_source']=$importdata["supply_source"];
+                $data['idnumpic1']=$importdata["idnumpic1"];
+                $data['track_man']=$importdata["track_man"];
+                $data['idnumpic2']=$importdata["idnumpic2"];
+                $data['unit_price']=(intval($totalprice)-intval($data['freight_price'])-intval($data['service_price']))/intval($data['num']);
+                $data['pay_id']=$importdata["pay_id"];
+                $data['customer_username']=$importdata["customer_username"];
+                $data['customer_userid']=$importdata["customer_userid"];
+                $data['order_time']=$importdata["order_time"];
+                $data['freight_unit_price']=(float)$data['freight_price']/ (float)$data['num'];
+                $data['service_unit_price']=(float)$data['service_price']/(float) $data['num'];
                 //买家姓名
                 $data['customer_name']=$importdata["customer_name"];
+                $data['send_user_name']=$importdata["send_user_name"];
+                $data['send_user_phone']=$importdata["send_user_phone"];
                 $data['user_phone']=$importdata["client_phone"];
                 $data['customer_addr']=$importdata["customer_addr"];
                 $data['customer_province']=$importdata["customer_province"];
@@ -377,6 +610,8 @@ class Sell extends BaseController
                 $data['user_id_number']=$importdata["user_id_number"];
                 $data['user_info']=$importdata["user_info"];
                 $data['sell_vip_type']=$importdata["sell_vip_type"];
+                $data['pay_type']=$importdata["pay_type"];
+                $data['pay_check_info']=$importdata["pay_check_info"];
                 $vipType=SELL_VIP_NOMRAL;
                 if(!empty($data['sell_vip_type']))
                 {
@@ -387,13 +622,13 @@ class Sell extends BaseController
                     }
                 }
                 $data['refund_status']=REFUND_NO;
-
                 $data['build_time']=time();
                 $data['build_user']=$this->uid;
-
                 $data['pay_status']=PAY_OK;
                 $data['status']=CHECK_NO;
-                $ret=$this->model->where(['shop_order'=>$data['shop_order']])->find();
+                Debug::remark('addOneOrdertemp1', 'time');
+                $ret=$this->model->where(['shop_order'=>$data['shop_order']])->where('status','<>',DELETE_OK)->find();
+                Debug::remark('addOneOrdertemp2', 'time');
                 if(!empty($ret)){
                     return AjaxReturnMsg("平台订单号重复");
                 }
@@ -408,14 +643,14 @@ class Sell extends BaseController
                     $sellTypeValue=$this->configModel->getSellBaseValue($data['sell_type']);
                 }
                 $msg="";
-                $before_num=$this->getTotalNum(['status'=>CHECK_NO]);
+                Debug::remark('addOneOrdertemp3', 'time');
+                //$before_num=$this->getTotalNum(['status'=>CHECK_NO]);
+                Debug::remark('addOneOrdertemp4', 'time');
                 $resItem=array();
-
-
-
                 $resItem["id"]= $data['shop_order'];
                 $resItem["logistics"]=array();
 
+                Debug::remark('addOneOrder3', 'time');
                 if($data['sell_type']!=SELL_TYPE_NO)
                 {
                     $split_base=$itemValueBase>$sellTypeValue?$itemValueBase:$sellTypeValue;
@@ -428,6 +663,7 @@ class Sell extends BaseController
                             return AjaxReturnMsg($msg);
                         }
                         array_push($resItem["logistics"],$data["logistics"]);
+                        $newShipnumarr[]=$this->GetLogisticsData($data);
 
                     }
                     if($split_remain>0)
@@ -437,6 +673,7 @@ class Sell extends BaseController
                             return AjaxReturnMsg($msg);
                         }
                         array_push($resItem["logistics"],$data["logistics"]);
+                        $newShipnumarr[]=$this->GetLogisticsData($data);
                     }
                 }
                 else{
@@ -445,16 +682,48 @@ class Sell extends BaseController
                         return AjaxReturnMsg($msg);
                     }
                     array_push($resItem["logistics"],$data["logistics"]);
+                    $newShipnumarr[]=$this->GetLogisticsData($data);
                 }
+                Debug::remark('addOneOrder4', 'time');
                 array_push($getData,$resItem);
-                \think\Log::record("getData ".var_export($getData,true),'zyx');
-                \think\Log::record("resItem ".var_export($resItem,true),'zyx');
             }
-
+            //Debug::remark('addOneOrder5', 'time');
+            //同步物流到物流系统
+            if($sendflag==1){
+                $res=$this->syncLogicToLogic($newShipnumarr);
+                if(empty($res)){
+                    //return AjaxReturn(SUCCESS);
+                }else{
+                    return AjaxReturnMsg($res);
+                }
+            }
+            //Debug::remark('addOneOrder6', 'time');
             DB::commit();
-            $after_num=$this->getTotalNum(['status'=>CHECK_NO]);
+            //$after_num=$this->getTotalNum(['status'=>CHECK_NO]);
             \think\Log::record("getData ".var_export($getData,true),'zyx');
-            $this->logModel->addLog(sprintf("商店:%s 导入，待审核商品罐数:%d 导入后:%d",$shopinfo["name"],$before_num,$after_num),"",'info');
+            $logdata=array();
+            $logdata['controller']=$this->control;
+            $logdata['method']=$this->action;
+            $logdata['time']=time();
+            $logdata['info']='[info]'.sprintf("商店:%s 导入，",$shopinfo["name"]);
+            $logdata['userid']=$this->uid;
+            $this->logModel->insert($logdata);
+
+
+            //Debug::remark('addOneOrder7', 'time');
+//            \think\Log::record(' [ RunTime1:' . Debug::getRangeTime('addOneOrder1', 'addOneOrder2') . 's ]', 'zyx');
+//            \think\Log::record(' [ RunTime2:' . Debug::getRangeTime('addOneOrder2', 'addOneOrder3') . 's ]', 'zyx');
+//            \think\Log::record(' [ RunTime3:' . Debug::getRangeTime('addOneOrder3', 'addOneOrder4') . 's ]', 'zyx');
+//            \think\Log::record(' [ RunTime4:' . Debug::getRangeTime('addOneOrder4', 'addOneOrder5') . 's ]', 'zyx');
+//            \think\Log::record(' [ RunTime5:' . Debug::getRangeTime('addOneOrder5', 'addOneOrder6') . 's ]', 'zyx');
+//            \think\Log::record(' [ RunTime6:' . Debug::getRangeTime('addOneOrder6', 'addOneOrder7') . 's ]', 'zyx');
+//
+//            \think\Log::record(' [ RunTime6:' . Debug::getRangeTime('addOneOrdertemp0', 'addOneOrdertemp1') . 's ]', 'zyx');
+//            \think\Log::record(' [ RunTime6:' . Debug::getRangeTime('addOneOrdertemp1', 'addOneOrdertemp2') . 's ]', 'zyx');
+//            \think\Log::record(' [ RunTime6:' . Debug::getRangeTime('addOneOrdertemp2', 'addOneOrdertemp3') . 's ]', 'zyx');
+//            \think\Log::record(' [ RunTime6:' . Debug::getRangeTime('addOneOrdertemp3', 'addOneOrdertemp4') . 's ]', 'zyx');
+
+
 
             return AjaxReturn(SUCCESS,$getData);
         }
@@ -485,12 +754,12 @@ class Sell extends BaseController
 
     private  function  getRowInfo($row,$col)
     {
-        return sprintf("表格第%d行 第%d列出错:",$row,$col);
+        return sprintf("表格第%d行 第%d列出错:",$row+1,$col);
     }
     //初始化所选的未初始化的订单
     protected function insertRow($row,&$msg,&$orderNum,$rownum)
     {
-        //\think\Log::record("insertRow {$rownum} ".var_export($row,true),'zyx');
+        \think\Log::record("insertRow {$rownum} ".var_export($row,true),'zyx');
         $data=Array();
         $startIndex=0;
         $shop_name=trim(getUtf8($row[$startIndex++]));
@@ -558,18 +827,18 @@ class Sell extends BaseController
         $data['freight_unit_price']=(float)$data['freight_price']/ (float)$data['num'];
         $data['service_unit_price']=(float)$data['service_price']/(float) $data['num'];
 
-
         //买家姓名
         $data['customer_name']=getUtf8(trim($row[$startIndex++]));
-
-
         $data['user_phone']=trim(trim($row[$startIndex++]),'#');
         $data['customer_addr']=getUtf8(trim($row[$startIndex++]));
         $data['customer_province']=getUtf8(trim($row[$startIndex++]));
         $data['customer_city']=getUtf8(trim($row[$startIndex++]));
         $data['customer_area']=getUtf8(trim($row[$startIndex++]));
         $data['user_id_number']=getUtf8(trim(trim($row[$startIndex++]),'#'));
-
+        if(empty($data['user_id_number'])==false && checkIdCard($data['user_id_number'])==false){
+            $msg=$this->getRowInfo($rownum,$startIndex).$data['user_id_number']."不是正确的身份证";
+            return SYSTEM_ERROR;
+        }
         $data['user_info']=getUtf8(trim($row[$startIndex++]));
         $data['sell_vip_type']=trim($row[$startIndex++]);
         if(!empty($data['sell_vip_type']))
@@ -644,10 +913,6 @@ class Sell extends BaseController
             $split_base=$itemValueBase>$sellTypeValue?$itemValueBase:$sellTypeValue;
             $split_num=floor($data['num']/$split_base);
             $split_remain=$data['num']%$split_base;
-
-            //\think\Log::record("split_num:".$split_num." split_remain:".$split_remain." split_base:".$split_base,'zyx');
-
-
             for ($index=0;$index<$split_num;$index++){
                 $ret=$this->importSplitOneOrder($split_base,$orderNum,$data,$msg);
                 if($ret!=SUCCESS){
@@ -673,16 +938,32 @@ class Sell extends BaseController
 
     }
 
-    //拆分一个订单
-    private  function  importSplitOneOrder($itemnum,&$orderNum,&$data,&$msg)
-    {
+    public function  RefreshLogistics(){
+        $sellid = request()->post('id', null);
+        if(empty($sellid)==true){
+            return AjaxReturnMsg("id空");
+        }
+        $logistics_num=$this->addNewLogistics();
+        if($logistics_num==SYSTEM_ERROR){
+            return AjaxReturnMsg("失败");
+        }
+        $ret=$this->model->where(["id"=>$sellid])->update(["logistics"=>$logistics_num]);
+        if(empty($ret))
+        {
+           
+            return AjaxReturnMsg("失败");
+        }
+        return AjaxReturn(SUCCESS);
+    }
+
+    private function addNewLogistics(){
         $ret=$this->configModel->where('name','=','logistics_count')->setInc('int_value',1);
         if(empty($ret))
         {
             $msg=$data['shop_order']."数据库物流单号操作异常";
             return SYSTEM_ERROR;
         }
-        $logisticsCountConf=$this->configModel->where('name','=','logistics_count')->find();
+        $logisticsCountConf=$this->configModel->lock(true)->where('name','=','logistics_count')->find();
         $logisticsBase=$this->configModel->getConfig("logistics_base");
 
         preg_match('/^([^\d]*)([\d]*)([^\d]*)$/',$logisticsBase,$match);
@@ -694,9 +975,19 @@ class Sell extends BaseController
             $msg=$data['shop_order']."数据库物流单号异常";
             return SYSTEM_ERROR;
         }
+        return $match[1].($logisticsValue+$logisticsCountConf['int_value']).$match[3];
+    }
+
+    //拆分一个订单
+    private  function  importSplitOneOrder($itemnum,&$orderNum,&$data,&$msg)
+    {
+       $logistics_num=$this->addNewLogistics();
+       if($logistics_num==SYSTEM_ERROR){
+           return SYSTEM_ERROR;
+       }
         $orderNum=$orderNum+1;
         $data['id']=getOrderId(SELL_PRE,$this->uid,$orderNum);
-        $data['logistics']=$match[1].($logisticsValue+$logisticsCountConf['int_value']).$match[3];
+        $data['logistics']=$logistics_num;
         $data['num']=$itemnum;
 
         $data['pay_money']=floatval($data['unit_price'])*$data['num']+$data['freight_unit_price']*$data['num']+$data['service_unit_price']*$data['num'];
@@ -706,6 +997,7 @@ class Sell extends BaseController
         {
             return INSERT_ERROR;
         }
+        $this->logModel->addLog(sprintf("增加单:%s  logistics:%s",$data["id"],$data["logistics"]));
         return SUCCESS;
     }
 
@@ -972,7 +1264,7 @@ class Sell extends BaseController
         Db::startTrans();
         try{
             foreach ($id as $key => $val) {
-                $sellinfo=$this->model->where(['id'=>$val])->find();
+                $sellinfo=$this->model->where(['id'=>$val])->lock(true)->find();
                 if(empty($sellinfo))
                 {
                     return AjaxReturn(ID_ERROR);
@@ -1044,7 +1336,7 @@ class Sell extends BaseController
         Db::startTrans();
         try{
             foreach ($id as $key => $val) {
-                $sellInfo=$this->model->where(['id'=>$val])->find();
+                $sellInfo=$this->model->where(['id'=>$val])->lock(true)->find();
                 if(empty($sellInfo))
                 {
                     return AjaxReturn(ID_ERROR);
@@ -1120,7 +1412,7 @@ class Sell extends BaseController
 
             }
             DB::commit();
-            $this->logModel->addLog("订单:".json_encode($id));
+            $this->logModel->addLog("仓库:".$storeId."订单:".json_encode($id));
             return AjaxReturn(SUCCESS);
         }
         catch (\Exception $e){
@@ -1130,6 +1422,7 @@ class Sell extends BaseController
         }
     }
 
+   
     //反审核
     public function  checkNo()
     {
@@ -1141,7 +1434,7 @@ class Sell extends BaseController
         Db::startTrans();
         try{
             foreach ($id as $key => $val) {
-                $info=$this->model->where(['id'=>$val])->find();
+                $info=$this->model->where(['id'=>$val])->lock(true)->find();
                 if(empty($info))
                 {
                     return AjaxReturn(ERROR_ID);
@@ -1149,6 +1442,10 @@ class Sell extends BaseController
                 if($info['status']==DELETE_OK)
                 {
                     return AjaxReturn(CHECK_CLOSE_ERROR);
+                }
+                if($info['status']!=CHECK_OK)
+                {
+                    return AjaxReturnMsg($val."状态不对");
                 }
 //                if($info['check_user']!=$this->uid)
 //                {

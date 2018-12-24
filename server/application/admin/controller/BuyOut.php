@@ -14,6 +14,7 @@ use think\Request;
 use data\model\BuyOutModel;
 use data\model\ItemModel;
 use data\model\StoreModel;
+//退货单
 class BuyOut extends BuyInStore
 {
     protected $model;

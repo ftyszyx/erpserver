@@ -139,11 +139,13 @@ class BuyInStore extends BaseController
                 $itemid=$value['id'];
                 $num=$value['num'];
                 if($type=="in"){
+                    //入库单新增
                     $this->inStoreLogModel->addOneLog(INSTORE_TYPE,$data['id'],$data['store_id'],$itemid,$num,true);
                     $this->storeItemModel->addItem($itemid,$num,$data['store_id'],'in_store');
                     $this->storeItemModel->delItem($itemid,$num,$data['store_id'],'on_way');
                 }
                 else{
+                     //退货单新增
                     $this->inStoreLogModel->addOneLog(OUTSTORE_TYPE,$data['id'],$data['store_id'],$itemid,$num,false);
                     $this->storeItemModel->delItem($itemid,$num,$data['store_id'],'in_store');
                 }
@@ -203,6 +205,7 @@ class BuyInStore extends BaseController
                     $itemid=$iteminfo['id'];
                     $num=$iteminfo['num'];
                     if($type=="in"){
+                        //入库单废弃
                         $ret=$this->buyOutModel->where(['buy_order'=>$orderId,'close_status'=>DELETE_NO])->select();
                         if(!empty($ret)){
                             return AjaxReturnMsg($val['id']."关联采购单：".$orderId."有退货单关联，不能废弃,请先废弃退货单");
@@ -213,8 +216,10 @@ class BuyInStore extends BaseController
                     }
                     else
                     {
+                        //退货单废弃
                         $this->inStoreLogModel->addOneLog(OUTSTORE_DEL_TYPE,$val['id'],$storeid,$itemid,$num,true);
                         $this->storeItemModel->addItem($itemid,$num,$storeid,'in_store');
+
                     }
 
                 }
@@ -276,47 +281,42 @@ class BuyInStore extends BaseController
         }
 
         $iteminfo= request()->post('item_info/a', '');
-        if(!empty($iteminfo)){
 
-
-            DB::startTrans();
-            try{
-                $old_iteminfo=json_decode($oldinfo['item_info'],true);
+        DB::startTrans();
+        try{
+            if(!empty($iteminfo)) {
+                $old_iteminfo = json_decode($oldinfo['item_info'], true);
                 //去掉旧库存
-                if(!empty($old_iteminfo)){
-                    foreach ($old_iteminfo as $key=>$value){
-                        $itemid=$value['id'];
-                        $num=$value['num'];
-                        if($type=='in')
-                        {
-                            $ret=$this->buyOutModel->where(['buy_order'=>$oldinfo['buy_order'],'close_status'=>DELETE_NO])->select();
-                            if(!empty($ret)){
-                                return AjaxReturnMsg($id."关联采购单：".$oldinfo['buy_order']."有退货单关联，不能修改,请先废弃退货单");
+                if (!empty($old_iteminfo)) {
+                    foreach ($old_iteminfo as $key => $value) {
+                        $itemid = $value['id'];
+                        $num = $value['num'];
+                        if ($type == 'in') {
+                            $ret = $this->buyOutModel->where(['buy_order' => $oldinfo['buy_order'], 'close_status' => DELETE_NO])->select();
+                            if (!empty($ret)) {
+                                return AjaxReturnMsg($id . "关联采购单：" . $oldinfo['buy_order'] . "有退货单关联，不能修改,请先废弃退货单");
                             }
-                            $this->inStoreLogModel->addOneLog(INSTORE_UPDATE_TYPE,$id,$oldinfo['store_id'],$itemid,$num,false);
-                            $this->storeItemModel->delItem($itemid,$num,$oldinfo['store_id'],'in_store');
-                            $this->storeItemModel->addItem($itemid,$num,$oldinfo['store_id'],'on_way');
-                        }
-                        else{
-                            $this->inStoreLogModel->addOneLog(OUTSTORE_UPDATE_TYPE,$id,$oldinfo['store_id'],$itemid,$num,true);
-                            $this->storeItemModel->addItem($itemid,$num,$oldinfo['store_id'],'in_store');
+                            $this->inStoreLogModel->addOneLog(INSTORE_UPDATE_TYPE, $id, $oldinfo['store_id'], $itemid, $num, false);
+                            $this->storeItemModel->delItem($itemid, $num, $oldinfo['store_id'], 'in_store');
+                            $this->storeItemModel->addItem($itemid, $num, $oldinfo['store_id'], 'on_way');
+                        } else {
+                            $this->inStoreLogModel->addOneLog(OUTSTORE_UPDATE_TYPE, $id, $oldinfo['store_id'], $itemid, $num, true);
+                            $this->storeItemModel->addItem($itemid, $num, $oldinfo['store_id'], 'in_store');
                         }
                     }
                 }
 
                 //增加新库存
-                foreach ($iteminfo as $key=>$value){
-                    $itemid=$value['id'];
-                    $num=$value['num'];
-                    if($type=='in')
-                    {
-                        $this->inStoreLogModel->addOneLog(INSTORE_UPDATE_TYPE,$id,$oldinfo['store_id'],$itemid,$num,true);
-                        $this->storeItemModel->addItem($itemid,$num,$oldinfo['store_id'],'in_store');
-                        $this->storeItemModel->delItem($itemid,$num,$oldinfo['store_id'],'on_way');
-                    }
-                    else{
-                        $this->inStoreLogModel->addOneLog(OUTSTORE_UPDATE_TYPE,$id,$oldinfo['store_id'],$itemid,$num,false);
-                        $this->storeItemModel->delItem($itemid,$num,$oldinfo['store_id'],'in_store');
+                foreach ($iteminfo as $key => $value) {
+                    $itemid = $value['id'];
+                    $num = $value['num'];
+                    if ($type == 'in') {
+                        $this->inStoreLogModel->addOneLog(INSTORE_UPDATE_TYPE, $id, $oldinfo['store_id'], $itemid, $num, true);
+                        $this->storeItemModel->addItem($itemid, $num, $oldinfo['store_id'], 'in_store');
+                        $this->storeItemModel->delItem($itemid, $num, $oldinfo['store_id'], 'on_way');
+                    } else {
+                        $this->inStoreLogModel->addOneLog(OUTSTORE_UPDATE_TYPE, $id, $oldinfo['store_id'], $itemid, $num, false);
+                        $this->storeItemModel->delItem($itemid, $num, $oldinfo['store_id'], 'in_store');
                     }
 
                 }
@@ -332,15 +332,23 @@ class BuyInStore extends BaseController
                         return AjaxReturn($ret);
                     }
                 }
-                $this->logModel->addLog(json_encode($data,JSON_UNESCAPED_UNICODE));
-                DB::commit();
-                return AjaxReturn(SUCCESS);
+            }else{
+                //更新入库单
+                $ret=$this->model->updateOne($id,$data);
+                if($ret!=SUCCESS){
+                    return AjaxReturn($ret);
+                }
             }
-            catch (\Exception $e){
-                \think\Log::record("add item".$e->getMessage()." lines:".var_export($e->getLine(),true),'zyx');
-                DB::rollback();
-                return AjaxReturnMsg($e->getMessage());
-            }
+
+            $this->logModel->addLog(json_encode($data,JSON_UNESCAPED_UNICODE));
+            DB::commit();
+            return AjaxReturn(SUCCESS);
         }
+        catch (\Exception $e){
+            \think\Log::record("add item".$e->getMessage()." lines:".var_export($e->getLine(),true),'zyx');
+            DB::rollback();
+            return AjaxReturnMsg($e->getMessage());
+        }
+
     }
 }

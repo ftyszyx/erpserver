@@ -15,7 +15,9 @@ use data\model\UserModel;
 use think\Db;
 use think\Request;
 use data\model\BuyInModel;
-
+use data\model\BuyInStoreModel;
+use data\model\BuyOutModel;
+//采购单
 class BuyIn extends BaseController
 {
   protected $model;
@@ -23,6 +25,8 @@ class BuyIn extends BaseController
   protected $storeModel;
   protected $itemModel;
   protected  $storeItemModel;
+    protected  $buyInStoreModel;
+    protected  $buyOutModel;
   protected $logModel;
     public function __construct(Request $request = null)
     {
@@ -30,6 +34,8 @@ class BuyIn extends BaseController
         $this->model=new BuyInModel();
         $this->userModel=new UserModel();
         $this->storeModel=new StoreModel();
+        $this->buyInStoreModel=new BuyInStoreModel();
+        $this->buyOutModel=new BuyOutModel();
         $this->itemModel=new ItemModel();
         $this->logModel=new LogModel();
         $this->storeItemModel=new StoreItemModel();
@@ -150,15 +156,19 @@ class BuyIn extends BaseController
                     return AjaxReturn(BUYIN_STORE_DEL_ID_CLOSE);
                 }
                 //在途数减少
+                $orderid=$val["id"];
+                $ret=$this->buyOutModel->where(['buy_order'=>$orderid,'close_status'=>DELETE_NO])->find();
+                if(!empty($ret)){
+                    return AjaxReturnMsg($orderid."关联退货单：".$ret['id']." 不能废弃,请先废弃退货单");
+                }
 
-                if($val['in_store_status']==INSTORE_NO){
-                    //还没有入库
-                    $itemList=json_decode($val['item_info'],true);
-                    foreach ($itemList as $item)
-                    {
-                        $this->storeItemModel->delItem($item['id'],$item['num'],$val['store_id'],'on_way');
-                    }
-                }else if($val['in_store_status']==INSTORE_PART){
+                $ret=$this->buyInStoreModel->where(['buy_order'=>$orderid,'close_status'=>DELETE_NO])->find();
+                if(!empty($ret)){
+                    return AjaxReturnMsg($orderid."关联入库单：".$ret['id']." 不能废弃,请先废弃入库单");
+                }
+
+
+               if($val['in_store_status']==INSTORE_PART){
                     //部分入库
                     $itemList=json_decode($val['item_info'],true);
                     foreach ($itemList as $item)
@@ -168,6 +178,14 @@ class BuyIn extends BaseController
                             $instore=$item['inStore'];
                         }
                         $this->storeItemModel->delItem($item['id'],$item['num']-$instore,$val['store_id'],'on_way');
+                    }
+                }
+                else if($val['in_store_status']==INSTORE_NO){
+                    //还没有入库,或者全部入库
+                    $itemList=json_decode($val['item_info'],true);
+                    foreach ($itemList as $item)
+                    {
+                        $this->storeItemModel->delItem($item['id'],$item['num'],$val['store_id'],'on_way');
                     }
                 }
 

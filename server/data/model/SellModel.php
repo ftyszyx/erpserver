@@ -160,9 +160,13 @@ class SellModel extends BaseModel
             'sell.build_user'=>"build_user",
             'sell.check_user'=>"check_user",
             'sell.check_time'=>"check_time",
+          'sell.shop_sync_flag'=>"shop_sync_flag",
 
             'sell.info'=>"info",
             "sell.assign_order"=>"assign_order",
+          "sell.customer_userid"=>"customer_userid",
+          "sell.pay_type"=>"pay_type",
+          "sell.pay_check_info"=>"pay_check_info",
 
             'sell.item_id'=>"item_id",
             'sell.num'=>"num",
@@ -187,6 +191,8 @@ class SellModel extends BaseModel
             'sell.service_price'=>"service_price",
             'sell.freight_unit_price'=>"freight_unit_price",
             'sell.service_unit_price'=>"service_unit_price",
+          'sell.customer_username'=>"customer_username",
+          'sell.pay_id'=>"pay_id",
 
             'store.name'=>"store_name",
             'item.milk_period'=>"item_milk_period",
@@ -197,6 +203,7 @@ class SellModel extends BaseModel
             'check_user.name'=>"check_user_name",
             'build_user.name'=>"build_user_name",
             'shop.name'=>"shop_name",
+            "sell.supply_source"=>"supply_source",
             'store_item.in_store'=>"in_store_num"
 
         );

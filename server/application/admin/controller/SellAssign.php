@@ -132,7 +132,7 @@ class SellAssign extends  BaseController
             $data['order_info']=json_encode($id);
             $this->model->insert($data);
             DB::commit();
-            $this->logModel->addLog(json_encode($id));
+            $this->logModel->addLog("orderid:".$order_id."  ".json_encode($id));
             return AjaxReturn(SUCCESS);
         }
         catch (\Exception $e){

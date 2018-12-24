@@ -61,6 +61,14 @@ class BaseController extends Controller
             //\think\Log::record("go to action",'zyx');
             return;
         }
+        \think\Log::record("go to action test".($this->control=="Sell"),'zyx');
+        \think\Log::record("go to action test".($this->action=="syncLogicstics"),'zyx');
+
+        if(($this->control=="Sell")&&($this->action=="synclogicstics")){
+            //直接进函数验证
+            \think\Log::record("go to action",'zyx');
+            return;
+        }
         if(empty($this->uid)){
             echo AjaxReturn(NO_LOGIN);
             exit();
@@ -226,7 +234,7 @@ class BaseController extends Controller
         //输出Excel列名信息
         foreach ($headlist as $key => $value) {
             //CSV的Excel支持GBK编码，一定要转换，否则乱码
-            $headlist[$key] = iconv('utf-8', 'gbk', $value);
+            $headlist[$key] = iconv('UTF-8', 'GBK//IGNORE', $value);
         }
 
         //将数据通过fputcsv写到文件句柄
@@ -245,7 +253,7 @@ class BaseController extends Controller
         $logfile=fopen($filepath, 'a');
         fputcsv($logfile, $headlist);
         //每隔$limit行，刷新一下输出buffer，不要太大，也不要太小
-        $limit = 100000;
+        $limit = 1000;
 
 
         if($logModelName=="InStoreLog"&&$subtype=="total"){
@@ -300,15 +308,15 @@ class BaseController extends Controller
             }
             foreach ($totalArray as $totalitem){
                 $rows = array();
-                $rows[] = iconv('utf-8', 'gbk', $totalitem['item_code']);
-                $rows[] = iconv('utf-8', 'gbk', $totalitem['item_name']);
-                $rows[] = iconv('utf-8', 'gbk', $totalitem['item_sort_id']);
-                $rows[] = iconv('utf-8', 'gbk', $totalitem['store_name']);
-                $rows[] = iconv('utf-8', 'gbk', $totalitem['before_num']);
-                $rows[] = iconv('utf-8', 'gbk', $totalitem['in_store']);
-                $rows[] = iconv('utf-8', 'gbk', $totalitem['out_store']);
-                $rows[] = iconv('utf-8', 'gbk', $totalitem['sell']);
-                $rows[] = iconv('utf-8', 'gbk', $totalitem['after_num']);
+                $rows[] = iconv('UTF-8', 'GBK//IGNORE', $totalitem['item_code']);
+                $rows[] = iconv('UTF-8', 'GBK//IGNORE', $totalitem['item_name']);
+                $rows[] = iconv('UTF-8', 'GBK//IGNORE', $totalitem['item_sort_id']);
+                $rows[] = iconv('UTF-8', 'GBK//IGNORE', $totalitem['store_name']);
+                $rows[] = iconv('UTF-8', 'GBK//IGNORE', $totalitem['before_num']);
+                $rows[] = iconv('UTF-8', 'GBK//IGNORE', $totalitem['in_store']);
+                $rows[] = iconv('UTF-8', 'GBK//IGNORE', $totalitem['out_store']);
+                $rows[] = iconv('UTF-8', 'GBK//IGNORE', $totalitem['sell']);
+                $rows[] = iconv('UTF-8', 'GBK//IGNORE',$totalitem['after_num']);
                 fputcsv($fp, $rows);
                 fputcsv($logfile, $rows);
             }
@@ -350,12 +358,12 @@ class BaseController extends Controller
             }
             foreach ($totalArray as $totalitem){
                 $rows = array();
-                $rows[] = iconv('utf-8', 'gbk', $totalitem['shop_name']);
-                $rows[] = iconv('utf-8', 'gbk', $totalitem['item_name']);
-                $rows[] = iconv('utf-8', 'gbk', $totalitem['store_name']);
-                $rows[] = iconv('utf-8', 'gbk', $totalitem['item_sort_id']);
-                $rows[] = iconv('utf-8', 'gbk', $totalitem['item_type_sort_id']);
-                $rows[] = iconv('utf-8', 'gbk', $totalitem['total_num']);
+                $rows[] = iconv('UTF-8', 'GBK//IGNORE', $totalitem['shop_name']);
+                $rows[] = iconv('UTF-8', 'GBK//IGNORE', $totalitem['item_name']);
+                $rows[] = iconv('UTF-8', 'GBK//IGNORE', $totalitem['store_name']);
+                $rows[] = iconv('UTF-8', 'GBK//IGNORE', $totalitem['item_sort_id']);
+                $rows[] = iconv('UTF-8', 'GBK//IGNORE', $totalitem['item_type_sort_id']);
+                $rows[] = iconv('UTF-8', 'GBK//IGNORE', $totalitem['total_num']);
                 fputcsv($fp, $rows);
                 fputcsv($logfile, $rows);
             }
@@ -372,8 +380,9 @@ class BaseController extends Controller
                     $rows = array();
                     foreach ($namelist as $keyname) {
                         $itemText=$model->exportNameProcess($keyname,$item[$keyname]);
-                        //Log::record("get:{$itemText} ",'zyx');
-                        $rows[] = iconv('utf-8', 'gbk', $itemText);
+                        //Log::record("get:{$itemText} key:{$keyname} ",'zyx');
+                        $rows[] = iconv('UTF-8', 'GBK//IGNORE', $itemText);
+                        //Log::record("get:{$itemText} key:{$keyname} ok",'zyx');
                     }
                     fputcsv($fp, $rows);
                     fputcsv($logfile, $rows);
@@ -404,9 +413,9 @@ class BaseController extends Controller
         {
             $data['info']='[info]'."导出入库汇总";
         }else if($logModelName=="Sell"&&$subtype=="item_total")
-    {
-        $data['info']='[info]'."导出商品汇总";
-    }
+        {
+            $data['info']='[info]'."导出商品汇总";
+        }
         else{
             $data['info']='[info]'."导出表格";
         }

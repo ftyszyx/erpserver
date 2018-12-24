@@ -75,7 +75,8 @@ class ItemType extends BaseController
         if(empty($id)){
             return AjaxReturn(ERROR_FORM);
         }
-        $ret=$this->model->delOne($id);
+        //$ret=$this->model->delOne($id);
+        $ret=$this->model->updateOne($id,["is_del"=>1]);
         if($ret==SUCCESS)
         {
             $this->logModel->addLog("类型id:".$id." 类型:".$name);

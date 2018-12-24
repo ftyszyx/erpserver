@@ -49,11 +49,14 @@ class File
             $destination = $this->config['path'] . 'single.log';
         } else {
             $cli         = IS_CLI ? '_cli' : '';
-            $destination = $this->config['path'] . date('Ym') . DS . date('d') . $cli . '.log';
+            $destination = $this->config['path']. date('Ym') . DS . date('d') . $cli . '.log';
         }
 
         $path = dirname($destination);
-        !is_dir($path) && mkdir($path, 0755, true);
+        if(!is_dir($path)){
+            mkdir($path, 0777, true);
+            chmod($path,0777); 
+        }
 
         $info = '';
         foreach ($log as $type => $val) {

@@ -21,6 +21,9 @@ class ConfigModel extends BaseModel{
     //获取默认仓库
     public  function getConfig($name){
         $config=Cache::get("config");
+        if(empty($config[$name])){
+            return null;
+        }
         return $config[$name];
     }
 
